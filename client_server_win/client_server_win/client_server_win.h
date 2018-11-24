@@ -4,6 +4,12 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <mutex>
+
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/cloud_viewer.h>
 
 #include <boost/system/config.hpp>
 #include <boost/bind.hpp>
@@ -12,20 +18,30 @@
 
 using boost::asio::ip::tcp;
 
+#define VIEWER_SIZE 252672
+
 class PCLClient 
 {
 	private:
+		struct PointCloudBuffers {
+			typedef boost::shared_ptr<PointCloudBuffers> Ptr;
+			std::vector<short> points;
+			std::vector<unsigned char> rgb;
+		};
 		boost::asio::io_service& io_service_;
 		tcp::socket socket_;
-		std::vector<short> buf;
+		//long long int sizebuf = 1010688;
+		unsigned int nr_points = 0;
+		pcl::visualization::CloudViewer viewer_;
+		
 		void handle_connect(const boost::system::error_code& error);
+		std::shared_ptr<pcl::visualization::PCLVisualizer> createRGBVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
 		void do_close() { socket_.close(); };
 
 	public:
-		PCLClient(boost::asio::io_service& io_service, tcp::resolver::iterator endpoint_iterator) : io_service_(io_service), socket_(io_service) {
+		PCLClient(boost::asio::io_service& io_service, tcp::resolver::iterator endpoint_iterator) : io_service_(io_service), socket_(io_service), viewer_("PCL") {
 			boost::asio::async_connect(socket_, endpoint_iterator, boost::bind(&PCLClient::handle_connect, this, boost::asio::placeholders::error));
 		}
 		~PCLClient() { close(); };
-		//char* getBuff() { return buf; };
 		void close() { io_service_.post(boost::bind(&PCLClient::do_close, this)); };
 };

@@ -10,11 +10,13 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(Boost COMPONENTS filesystem system thread date_time REQUIRED)
 include_directories(${Boost_INCLUDE_DIRS})
 
+find_package(PCL CONFIG REQUIRED)
+
 set(SOURCES "client_server_win/client_server_win.cpp"
 	"client_server_win/client_server_win.h"
 	"main.cpp"
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
-target_link_libraries(${PROJECT_NAME} PRIVATE ${Boost_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} ${PCL_LIBRARIES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${Boost_INCLUDE_DIRS})
