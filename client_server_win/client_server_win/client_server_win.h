@@ -18,24 +18,15 @@
 
 using boost::asio::ip::tcp;
 
-#define VIEWER_SIZE 252672
-
 class PCLClient 
 {
 	private:
-		struct PointCloudBuffers {
-			typedef boost::shared_ptr<PointCloudBuffers> Ptr;
-			std::vector<short> points;
-			std::vector<unsigned char> rgb;
-		};
 		boost::asio::io_service& io_service_;
 		tcp::socket socket_;
-		//long long int sizebuf = 1010688;
 		unsigned int nr_points = 0;
 		pcl::visualization::CloudViewer viewer_;
 		
 		void handle_connect(const boost::system::error_code& error);
-		std::shared_ptr<pcl::visualization::PCLVisualizer> createRGBVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud);
 		void do_close() { socket_.close(); };
 
 	public:
