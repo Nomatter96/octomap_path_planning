@@ -23,8 +23,6 @@ void PCLServer::run() {
 	p_pcl_point_cloud->points.resize(zed.getResolution().area());
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr point_cloud_buff(new pcl::PointCloud<pcl::PointXYZRGB>);
 	
-	//viewer_ = createRGBVisualizer(p_pcl_point_cloud);
-	
 	startZED();
 	
 	boost::asio::io_service io_service;
@@ -56,16 +54,13 @@ void PCLServer::run() {
 			voxel_grid_filter_.filter(*point_cloud_buff);
 			nr_points = static_cast<unsigned int>(point_cloud_buff->points.size());
 			boost::asio::write(socket, boost::asio::buffer(&nr_points, sizeof(nr_points)));
-			boost::asio::write(socket, boost::asio::buffer(&point_cloud_buff->points.front(), nr_points * sizeof(float)));
+			boost::asio::write(socket, boost::asio::buffer(&point_cloud_buff->points.front(), nr_points * 8 * sizeof(float)));
 			mutex_input.unlock();
 			viewer_.showCloud(point_cloud_buff);
-			//viewer_->updatePointCloud(point_cloud_buff);
-			//viewer_->spinOnce(10);
 		}
 		else
 			sleep_ms(1);
 	}
-	//viewer_->close();
 	closeZED();
 }
 
@@ -94,40 +89,6 @@ void PCLServer::closeZED() {
 	stop_signal = true;
 	zed_callback.join();
 	zed.close();
-}
-
-void PCLServer::CopyPointCloudToBuffers(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud, PointCloudBuffers& cloud_buffers) {
-	cout << "ok" << endl;	
-	const size_t nr_points = cloud->points.size();
-	cloud_buffers.points.resize(nr_points * 3);
-	cloud_buffers.rgb.resize(nr_points * 3);
-	size_t j = 0;
-	for (size_t i = 0; i < nr_points; i++) {
-		const pcl::PointXYZRGB& point = cloud->points[i];
-		if (!pcl_isfinite(point.x) || !pcl_isfinite(point.y) || !pcl_isfinite(point.z))
-			continue;
-		const int conversion_factor = 500;
-		cloud_buffers.points[j * 3] = static_cast<short>(point.x * conversion_factor);
-		cloud_buffers.points[j * 3 + 1] = static_cast<short>(point.y * conversion_factor);
-		cloud_buffers.points[j * 3 + 2] = static_cast<short>(point.z * conversion_factor);
-		cloud_buffers.rgb[j * 3] = point.r;
-		cloud_buffers.rgb[j * 3 + 1] = point.g;
-		cloud_buffers.rgb[j * 3 + 2] = point.b;
-		j++;
-	}
-	cloud_buffers.points.resize(j * 3);
-	cloud_buffers.rgb.resize(j * 3);
-}
-
-shared_ptr<pcl::visualization::PCLVisualizer> PCLServer::createRGBVisualizer(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud) {
-	shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer("PCL ZED 3D Viewer"));
-    viewer->setBackgroundColor(0.12, 0.12, 0.12);
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(cloud);
-    viewer->addPointCloud<pcl::PointXYZRGB>(cloud, rgb);
-    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1.5);
-    viewer->addCoordinateSystem(1.0);
-    viewer->initCameraParameters();
-    return (viewer);
 }
 
 inline float PCLServer::convertColor(float colorIn) {
