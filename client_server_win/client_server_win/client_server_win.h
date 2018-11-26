@@ -10,9 +10,6 @@
 #include <pcl/point_types.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/cloud_viewer.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/segmentation/region_growing_rgb.h>
-#include <pcl/search/kdtree.h>
 
 #include <boost/system/config.hpp>
 #include <boost/bind.hpp>
@@ -32,7 +29,6 @@ class PCLClient
 
 		void handle_connect(const boost::system::error_code& error);
 		void do_close() { socket_.close(); };
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getRegSeg();
 
 	public:
 		PCLClient(boost::asio::io_service& io_service, tcp::resolver::iterator endpoint_iterator) : io_service_(io_service), socket_(io_service), viewer_("PCL") {

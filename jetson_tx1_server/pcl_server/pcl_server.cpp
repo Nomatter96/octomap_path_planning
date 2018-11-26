@@ -52,6 +52,7 @@ void PCLServer::run() {
 			}
 			voxel_grid_filter_.setInputCloud(p_pcl_point_cloud);
 			voxel_grid_filter_.filter(*point_cloud_buff);
+			point_cloud_buff = getRegSeg(&point_cloud_buff);
 			nr_points = static_cast<unsigned int>(point_cloud_buff->points.size());
 			boost::asio::write(socket, boost::asio::buffer(&nr_points, sizeof(nr_points)));
 			boost::asio::write(socket, boost::asio::buffer(&point_cloud_buff->points.front(), nr_points * 8 * sizeof(float)));
@@ -96,4 +97,28 @@ inline float PCLServer::convertColor(float colorIn) {
     unsigned char *color_uchar = (unsigned char *) &color_uint;
     color_uint = ((uint32_t) color_uchar[0] << 16 | (uint32_t) color_uchar[1] << 8 | (uint32_t) color_uchar[2]);
     return *reinterpret_cast<float *> (&color_uint);
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr PCLServer::getRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *test) {
+	pcl::search::Search <pcl::PointXYZRGB>::Ptr tree = boost::shared_ptr<pcl::search::Search<pcl::PointXYZRGB> >(new pcl::search::KdTree<pcl::PointXYZRGB>);
+	/*pcl::IndicesPtr indices(new std::vector <int>);
+	pcl::PassThrough<pcl::PointXYZRGB> pass;
+	pass.setInputCloud(*test);
+	pass.setFilterFieldName("z");
+	pass.setFilterLimits(0.0, 1.0);
+	pass.filter(*indices);*/
+
+	pcl::RegionGrowingRGB<pcl::PointXYZRGB> reg;
+	reg.setInputCloud(*test);
+	//reg.setIndices(indices);
+	reg.setSearchMethod(tree);
+	reg.setDistanceThreshold(5);
+	reg.setPointColorThreshold(3);
+	reg.setRegionColorThreshold(2);
+	reg.setMinClusterSize(60);
+
+	std::vector <pcl::PointIndices> clusters;
+	reg.extract(clusters);
+
+	return reg.getColoredCloud();
 }

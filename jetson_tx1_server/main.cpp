@@ -18,7 +18,7 @@ int main (int argc, char ** argv) {
   	}
 	
 	int port = 11111;
-	float leaf_x = 0.05f, leaf_y = 0.05f, leaf_z = 0.05f;
+	float leaf_x = 0.03f, leaf_y = 0.03f, leaf_z = 0.03f;
 
 	pcl::console::parse_argument(argc, argv, "-port", port);		
 	pcl::console::parse_3x_arguments(argc, argv, "-leaf", leaf_x, leaf_y, leaf_z, false);

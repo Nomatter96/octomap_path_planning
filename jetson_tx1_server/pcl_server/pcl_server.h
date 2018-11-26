@@ -17,6 +17,10 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/filters/voxel_grid.h>
 
+#include <pcl/filters/passthrough.h>
+#include <pcl/segmentation/region_growing_rgb.h>
+#include <pcl/search/kdtree.h>
+
 #include <sl_zed/Camera.hpp>
 
 #include <boost/asio.hpp>
@@ -48,4 +52,5 @@ class PCLServer
 		void start();
 		void closeZED();
 		inline float convertColor(float colorIn);
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *test);
 };
