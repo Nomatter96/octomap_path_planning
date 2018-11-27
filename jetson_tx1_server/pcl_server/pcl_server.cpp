@@ -25,14 +25,14 @@ PCLServer::Run()
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
         sPPclPointCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-    sPPclPointCloud->points.resize(zed.getResolution().area());
+    sPPclPointCloud->points.resize(mZed.getResolution().area());
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
         sPointCloudBuff(new pcl::PointCloud<pcl::PointXYZRGB>);
 
     StartZED();
 
     boost::asio::io_service sIoService;
-    tcp::endpoint sEndpoint(tcp::v4(), static_cast<unsigned short> (port_));
+    tcp::endpoint sEndpoint(tcp::v4(), static_cast<unsigned short> (mPort));
     tcp::acceptor sAcceptor(sIoService, sEndpoint);
     tcp::socket sSocket (sIoService);
 
@@ -45,13 +45,13 @@ PCLServer::Run()
             float *sPDataCloud = mDataCloud.getPtr<float>();
             int sIndex = 0;
             for (auto &it : sPPclPointCloud->points) {
-                if (!isValidMeasure(sPDataCloud[index]))
+                if (!isValidMeasure(sPDataCloud[sIndex]))
                     it.x = it.y = it.z = it.rgb = 0;  
                 else {
-                    it.x = p_data_cloud[index];
-                    it.y = p_data_cloud[index + 1];
-                    it.z = p_data_cloud[index + 2];
-                    it.rgb = convertColor(p_data_cloud[index + 3]);
+                    it.x = sPDataCloud[sIndex];
+                    it.y = sPDataCloud[sIndex + 1];
+                    it.z = sPDataCloud[sIndex + 2];
+                    it.rgb = ConvertColor(sPDataCloud[sIndex + 3]);
                 }
                 sIndex += 4;
             }
@@ -66,7 +66,7 @@ PCLServer::Run()
                 boost::asio::buffer(&sPointCloudBuff->points.front(),
                     sNrPoints * 8 * sizeof(float)));
             mMutexInput.unlock();
-            mViewer.showCloud(point_cloud_buff);
+            mViewer.showCloud(sPointCloudBuff);
         } else
             sleep_ms(1);
     }
@@ -89,7 +89,7 @@ PCLServer::Start()
     while (!mStopSignal) {
         if (mZed.grab(SENSING_MODE_STANDARD) == SUCCESS) {
             mMutexInput.lock();
-            mZed.retrieveMeasure(data_cloud, MEASURE_XYZRGBA);
+            mZed.retrieveMeasure(mDataCloud, MEASURE_XYZRGBA);
             mMutexInput.unlock();
             mHasData = true;
         } else
