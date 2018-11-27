@@ -1,56 +1,58 @@
 #pragma once
 
-#ifdef _WIN32
-#undef max
-#undef min
-#endif
-
-#include <thread>
 #include <mutex>
+#include <thread>
 #include <vector>
-
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <pcl/console/parse.h>
-#include <pcl/common/common_headers.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/filters/voxel_grid.h>
-
-#include <pcl/filters/passthrough.h>
-#include <pcl/segmentation/region_growing_rgb.h>
-#include <pcl/search/kdtree.h>
-
-#include <sl_zed/Camera.hpp>
 
 #include <boost/asio.hpp>
 #include <boost/thread/thread.hpp>
+#include <pcl/common/common_headers.h>
+#include <pcl/console/parse.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/segmentation/region_growing_rgb.h>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <sl_zed/Camera.hpp>
 
+namespace server {
 
 class PCLServer
 {
-	public:
-		PCLServer(const int port = 11111, const float leaf_size_x = 0.01f, const float leaf_size_y = 0.01f, const float leaf_size_z = 0.01f) : port_(port), viewer_("PCL") {
-			voxel_grid_filter_.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);			
-		};
-		~PCLServer() {};	
-		void run();
+public:
+    PCLServer(const int aPort = 11111,
+              const float aLeafSizeX = 0.01f,
+              const float aLeafSizeY = 0.01f,
+              const float aLeafSizeZ = 0.01f)
+        : mPort(aPort)
+        , mViewer("PCL")
+    {
+        mVoxelGridFilter.setLeafSize(aLeafSizeX, aLeafSizeY, aLeafSizeZ);			
+    };
+    ~PCLServer() {};	
+    void Run();
 		
-	private:
-		sl::Camera zed;
-		sl::Mat data_cloud;
-		bool stop_signal;
-		bool has_data;
-		int port_;
-		std::thread zed_callback;
-		std::mutex mutex_input;
-		pcl::visualization::CloudViewer viewer_;		
-		long long int sizebuf;
-		pcl::VoxelGrid<pcl::PointXYZRGB> voxel_grid_filter_;
+private:
+    void StartZED();
+    void Start();
+    void CloseZED();
+    inline float ConvertColor(float aColorIn);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
+        GetRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *aPointCLoud);
 
-		void startZED();
-		void start();
-		void closeZED();
-		inline float convertColor(float colorIn);
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr getRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *test);
+    sl::Camera mZed;
+    sl::Mat mDataCloud;
+    bool mStopSignal;
+    bool mHasData;
+    int mPort;
+    std::thread mZedCallback;
+    std::mutex mMutexInput;
+    pcl::visualization::CloudViewer mViewer;		
+    long long int mSizeBuff;
+    pcl::VoxelGrid<pcl::PointXYZRGB> mVoxelGridFilter;
 };
+
+}

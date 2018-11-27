@@ -2,17 +2,22 @@
 
 using namespace std;
 
+namespace cl {
 
-void PCLClient::handle_connect(const boost::system::error_code& error) {
-	if (error)
-		return;
-	while (!viewer_.wasStopped()) {
-		boost::asio::read(socket_, boost::asio::buffer(&nr_points, sizeof(nr_points)));
-		if (nr_points != 0) {
-			buf_->points.resize(nr_points);
-			boost::asio::read(socket_, boost::asio::buffer(&buf_->points.front(), nr_points * 8 * sizeof(float)));
-			viewer_.showCloud(buf_);
-		}
-		nr_points = 0;
-	}
+void
+PCLClient::HandleConnect(const boost::system::error_code& aError) 
+{
+    if (aError)
+        return;
+    while (!mViewer.wasStopped()) {
+        boost::asio::read(mSocket, boost::asio::buffer(&mNrPoints, sizeof(mNrPoints)));
+        if (mNrPoints) {
+            mBuf->points.resize(mNrPoints);
+            boost::asio::read(mSocket, boost::asio::buffer(&mBuf->points.front(), mNrPoints * 8 * sizeof(float)));
+            mViewer.showCloud(mBuf);
+        }
+        mNrPoints = 0;
+    }
 };
+
+}

@@ -1,29 +1,34 @@
-#include <stdio.h>
-#include <string.h>
 #include "pcl_server/pcl_server.h"
 
-using namespace sl;
+#include <stdio.h>
+#include <string.h>
 
-void usage (char **argv) {
-	std::cout << "usage: " << argv[0] << " <options>\n"
-		<< "where options are:\n"
-		<< "  -port p :: set the server port (default: 11111)\n"
-		<< "  -leaf x, y, z  :: set the voxel grid leaf size (default: 0.01)\n";
+using namespace std;
+
+void
+usage (char **argv)
+{
+    cout << "usage: " << argv[0] << " <options>\n"
+        << "where options are:\n"
+        << "  -port p :: set the server port (default: 11111)\n"
+        << "  -leaf x, y, z  :: set the voxel grid leaf size (default: 0.01)\n";
 }
 
-int main (int argc, char ** argv) {
-	if (pcl::console::find_argument (argc, argv, "-h") != -1){
-    		usage (argv);
-    		return (0);
-  	}
+int
+main (int argc, char ** argv)
+{
+    if (pcl::console::find_argument(argc, argv, "-h") != -1) {
+        usage(argv);
+        return 0;
+    }
 	
-	int port = 11111;
-	float leaf_x = 0.03f, leaf_y = 0.03f, leaf_z = 0.03f;
+    int sPort = 11111;
+    float sLeafX = 0.03f, sLeafY = 0.03f, sLeafZ = 0.03f;
 
-	pcl::console::parse_argument(argc, argv, "-port", port);		
-	pcl::console::parse_3x_arguments(argc, argv, "-leaf", leaf_x, leaf_y, leaf_z, false);
-	
-	PCLServer server(port, leaf_x, leaf_y, leaf_z);
-	server.run();
-	return (0);
+    pcl::console::parse_argument(argc, argv, "-port", sPort);		
+    pcl::console::parse_3x_arguments(argc, argv, "-leaf", sLeafX, sLeafY, sLeafZ, false);
+
+    server::PCLServer sServer(sPort, sLeafX, sLeafY, sLeafZ);
+    sServer.Run();
+    return 0;
 }

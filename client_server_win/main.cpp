@@ -2,21 +2,23 @@
 
 using namespace std;
 
-int main(int argc, char* argv[]) {
-	try
-	{
-		if (argc != 3) {
-			std::cerr << "Usage: <host> <port>\n";
-			return -1;
-		}
-		boost::asio::io_service io_service;
-		tcp::resolver resolver(io_service);
-		tcp::resolver::query query(argv[1], argv[2]);
-		tcp::resolver::iterator iterator = resolver.resolve(query);
-		PCLClient client(io_service, iterator);
-		io_service.run();
-	}
-	catch (exception& e) {
-		cerr << "Exception: " << e.what() << "\n";
-	}
+int
+main(int argc, char* argv[]) 
+{
+    try
+    {
+        if (argc != 3) {
+            std::cerr << "Usage: <host> <port>\n";
+            return -1;
+        }
+        boost::asio::io_service sIoService;
+        tcp::resolver sResolver(sIoService);
+        tcp::resolver::query sQuery(argv[1], argv[2]);
+        tcp::resolver::iterator sIterator = sResolver.resolve(sQuery);
+        cl::PCLClient sClient(sIoService, sIterator);
+        sIoService.run();
+    }
+    catch (exception& aErr) {
+        cerr << "Exception: " << aErr.what() << "\n";
+    }
 }
