@@ -6,67 +6,70 @@ using namespace std;
 
 namespace server {
 
-void 
+void
 PCLServer::Run()
 {
-    InitParameters sInitParams;
-    sInitParams.camera_resolution = RESOLUTION_VGA;
-    sInitParams.camera_fps = 30;
-    sInitParams.coordinate_units = UNIT_METER;
-    sInitParams.coordinate_system = COORDINATE_SYSTEM_RIGHT_HANDED_Y_UP;
-    sInitParams.depth_mode = DEPTH_MODE_PERFORMANCE;
+    InitParameters initParams;
+    initParams.camera_resolution = RESOLUTION_VGA;
+    initParams.camera_fps = 30;
+    initParams.coordinate_units = UNIT_METER;
+    initParams.coordinate_system = COORDINATE_SYSTEM_RIGHT_HANDED_Y_UP;
+    initParams.depth_mode = DEPTH_MODE_PERFORMANCE;
 	
-    ERROR_CODE sErr = mZed.open(sInitParams);
-    if (sErr != SUCCESS) {
-        cout << toString(sErr) << "\n";
+    ERROR_CODE err = mZed.open(initParams);
+    if (err != SUCCESS) {
+        cout << toString(err) << "\n";
         mZed.close();
         return;
     }
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
-        sPPclPointCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-    sPPclPointCloud->points.resize(mZed.getResolution().area());
+        p_pcl_point_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+    p_pcl_point_cloud->points.resize(mZed.getResolution().area());
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
-        sPointCloudBuff(new pcl::PointCloud<pcl::PointXYZRGB>);
+        point_cloud_buff(new pcl::PointCloud<pcl::PointXYZRGB>);
 
     StartZED();
 
-    boost::asio::io_service sIoService;
-    tcp::endpoint sEndpoint(tcp::v4(), static_cast<unsigned short> (mPort));
-    tcp::acceptor sAcceptor(sIoService, sEndpoint);
-    tcp::socket sSocket (sIoService);
+    boost::asio::io_service ioService;
+    tcp::endpoint endPoint(tcp::v4(), static_cast<unsigned short> (mPort));
+    tcp::acceptor acceptor(ioService, endPoint);
+    tcp::socket socket (ioService);
 
-    cout << "Listening on port " << mPort << "..." << "\n";
-    sAcceptor.accept(sSocket);
-    cout << "Client connected." << "\n";
-    mSizeBuff = mDataCloud.getHeight() * mDataCloud.getWidth() * 4;
+    cout << "Listening on port " << mPort << "...\n";
+    acceptor.accept(socket);
+    cout << "Client connected.\n";
     while (!mViewer.wasStopped()) {
         if (mMutexInput.try_lock()) {
-            float *sPDataCloud = mDataCloud.getPtr<float>();
-            int sIndex = 0;
-            for (auto &it : sPPclPointCloud->points) {
-                if (!isValidMeasure(sPDataCloud[sIndex]))
+            float *p_data_cloud = mDataCloud.getPtr<float>();
+            int index = 0;
+            for (auto &it : p_pcl_point_cloud->points) {
+                if (!isValidMeasure(p_data_cloud[index]))
                     it.x = it.y = it.z = it.rgb = 0;  
                 else {
-                    it.x = sPDataCloud[sIndex];
-                    it.y = sPDataCloud[sIndex + 1];
-                    it.z = sPDataCloud[sIndex + 2];
-                    it.rgb = ConvertColor(sPDataCloud[sIndex + 3]);
+                    it.x = p_data_cloud[index];
+                    it.y = p_data_cloud[index + 1];
+                    it.z = p_data_cloud[index + 2];
+                    it.rgb = ConvertColor(p_data_cloud[index + 3]);
                 }
-                sIndex += 4;
+                index += 4;
             }
-            mVoxelGridFilter.setInputCloud(sPPclPointCloud);
-            mVoxelGridFilter.filter(*sPointCloudBuff);
-            sPointCloudBuff = GetRegSeg(&sPointCloudBuff);
-            unsigned int sNrPoints = 
-                static_cast<unsigned int>(sPointCloudBuff->points.size());
-            boost::asio::write(sSocket,
-                boost::asio::buffer(&sNrPoints, sizeof(sNrPoints)));
-            boost::asio::write(sSocket,
-                boost::asio::buffer(&sPointCloudBuff->points.front(),
-                    sNrPoints * 8 * sizeof(float)));
+            mVoxelGridFilter.setInputCloud(p_pcl_point_cloud);
+            mVoxelGridFilter.filter(*point_cloud_buff);
+            point_cloud_buff = GetRegSeg(&point_cloud_buff);
+            float4 pE = mPlane.getPlaneEquation();
+            for (auto& it : p_pcl_point_cloud->points)
+                if ((pE[0] * it.x + pE[1] * it.y + pE[2] * it.z) == eq[3])
+                    it.rgb = ConvertColor(0xffffff);
+            unsigned int nrPoints = 
+                static_cast<unsigned int>(point_cloud_buff->points.size());
+            boost::asio::write(socket,
+                boost::asio::buffer(&nrPoints, sizeof(nrPoints)));
+            boost::asio::write(socket,
+                boost::asio::buffer(&point_cloud_buff->points.front(),
+                    nrPoints * 8 * sizeof(float)));
             mMutexInput.unlock();
-            mViewer.showCloud(sPointCloudBuff);
+            mViewer.showCloud(point_cloud_buff);
         } else
             sleep_ms(1);
     }
@@ -90,6 +93,8 @@ PCLServer::Start()
         if (mZed.grab(SENSING_MODE_STANDARD) == SUCCESS) {
             mMutexInput.lock();
             mZed.retrieveMeasure(mDataCloud, MEASURE_XYZRGBA);
+            Transform resetTrakingFloorFrame;
+            mZed.findFloorPlane(mPlane, resetTrakingFloorFrame);
             mMutexInput.unlock();
             mHasData = true;
         } else
@@ -108,29 +113,29 @@ PCLServer::CloseZED()
 inline float
 PCLServer::ConvertColor(float aColorIn)
 {
-    uint32_t sColorUint = *(uint32_t *) & aColorIn;
-    unsigned char *sColorUchar = (unsigned char *) &sColorUint;
-    sColorUint = ((uint32_t) sColorUchar[0] << 16 |
-        (uint32_t) sColorUchar[1] << 8 | (uint32_t) sColorUchar[2]);
-    return *reinterpret_cast<float *> (&sColorUint);
+    uint32_t colorUint = *(uint32_t *) & aColorIn;
+    unsigned char *colorUchar = (unsigned char *) &colorUint;
+    colorUint = ((uint32_t) colorUchar[0] << 16 |
+        (uint32_t) colorUchar[1] << 8 | (uint32_t) colorUchar[2]);
+    return *reinterpret_cast<float *> (&colorUint);
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
 PCLServer::GetRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *aPointCloud)
 {
-    pcl::search::Search <pcl::PointXYZRGB>::Ptr sTree = 
+    pcl::search::Search <pcl::PointXYZRGB>::Ptr tree = 
         boost::shared_ptr<pcl::search::Search<pcl::PointXYZRGB>>
             (new pcl::search::KdTree<pcl::PointXYZRGB>);
-    pcl::RegionGrowingRGB<pcl::PointXYZRGB> sReg;
-    sReg.setInputCloud(*aPointCloud);
-    sReg.setSearchMethod(sTree);
-    sReg.setDistanceThreshold(5);
-    sReg.setPointColorThreshold(3);
-    sReg.setRegionColorThreshold(2);
-    sReg.setMinClusterSize(60);
-    vector <pcl::PointIndices> sClusters;
-    sReg.extract(sClusters);
-    return sReg.getColoredCloud();
+    pcl::RegionGrowingRGB<pcl::PointXYZRGB> reg;
+    reg.setInputCloud(*aPointCloud);
+    reg.setSearchMethod(tree);
+    reg.setDistanceThreshold(5);
+    reg.setPointColorThreshold(3);
+    reg.setRegionColorThreshold(2);
+    reg.setMinClusterSize(60);
+    vector <pcl::PointIndices> clusters;
+    reg.extract(clusters);
+    return reg.getColoredCloud();
 }
 
 }

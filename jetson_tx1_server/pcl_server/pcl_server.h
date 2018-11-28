@@ -36,23 +36,23 @@ public:
     void Run();
 		
 private:
-    void StartZED();
-    void Start();
-    void CloseZED();
     inline float ConvertColor(float aColorIn);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
-        GetRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *aPointCLoud);
+        GetRegSeg(pcl::PointCloud<pcl::PointXYZRGB>::Ptr *aPointCLoud); 
+    void CloseZED();
+    void Start();
+    void StartZED();
 
+    bool mHasData;
+    bool mStopSignal;
+    int mPort;
+    pcl::visualization::CloudViewer mViewer;
+    pcl::VoxelGrid<pcl::PointXYZRGB> mVoxelGridFilter;
     sl::Camera mZed;
     sl::Mat mDataCloud;
-    bool mStopSignal;
-    bool mHasData;
-    int mPort;
-    std::thread mZedCallback;
+    sl::Plane mPlane;
     std::mutex mMutexInput;
-    pcl::visualization::CloudViewer mViewer;		
-    long long int mSizeBuff;
-    pcl::VoxelGrid<pcl::PointXYZRGB> mVoxelGridFilter;
+    std::thread mZedCallback;
 };
 
 }

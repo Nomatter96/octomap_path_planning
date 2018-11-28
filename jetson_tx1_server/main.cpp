@@ -22,13 +22,13 @@ main (int argc, char ** argv)
         return 0;
     }
 	
-    int sPort = 11111;
-    float sLeafX = 0.03f, sLeafY = 0.03f, sLeafZ = 0.03f;
+    int port = 11111;
+    float leafX = 0.03f, leafY = 0.03f, leafZ = 0.03f;
 
-    pcl::console::parse_argument(argc, argv, "-port", sPort);		
-    pcl::console::parse_3x_arguments(argc, argv, "-leaf", sLeafX, sLeafY, sLeafZ, false);
+    pcl::console::parse_argument(argc, argv, "-port", port);		
+    pcl::console::parse_3x_arguments(argc, argv, "-leaf", leafX, leafY, leafZ, false);
 
-    server::PCLServer sServer(sPort, sLeafX, sLeafY, sLeafZ);
-    sServer.Run();
+    server::PCLServer server(port, leafX, leafY, leafZ);
+    server.Run();
     return 0;
 }
