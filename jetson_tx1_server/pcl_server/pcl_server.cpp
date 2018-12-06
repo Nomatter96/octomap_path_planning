@@ -12,13 +12,16 @@ PCLServer::PCLServer(const int aPort,
                      const float aLeafSizeY,
                      const float aLeafSizeZ)
     : mPort(aPort)
-    , mOcTree(0.1)
+    , mOcTree(NULL)
     , mPointCloudMaxX(numeric_limits<double>::max())
     , mPointCloudMaxY(numeric_limits<double>::max())
     , mPointCloudMaxZ(numeric_limits<double>::max())
+    , mOccupancyMaxZ(numeric_limits<double>::max())
     , mPointCloudMinX(-numeric_limits<double>::max())
     , mPointCloudMinY(-numeric_limits<double>::max())
     , mPointCloudMinZ(-numeric_limits<double>::max())
+    , mOccupancyMinZ(-numeric_limits<double>::max())
+    , mFilterSpeckles(false)
     , mFilterGroundPlane(false)
     , mWorldFrameId("/map")
     , mBaseFrameId("base_footprint")
@@ -27,8 +30,99 @@ PCLServer::PCLServer(const int aPort,
     , mGroundFilterPlaneDistance(0.07)
     , mMaxRange(-1.0)
     , mCompressMap(true)
+    , mPublishFreeSpace(false)
+    , mLatchedTopics(true)
+    , mNh()
+    , mTreeDepth(0)
+    , mMaxTreeDepth(0)
+    , mRes(0.05)
+    , mMinSizeX(0.0)
+    , mMinSizeY(0.0)
+    , mUseColoredMap(false)
+    , mUseHeightMap(true)
+    , mColorFactor(0.8)
+    , mIncrementalUpdate(false)
 {
     mVoxelGridFilter.setLeafSize(aLeafSizeX, aLeafSizeY, aLeafSizeZ);
+    mFmarkerPub = mNh.advertise<visualization_msgs::MarkerArray>
+                                    ("free_cells_vis_array", 1, mLatchedTopics);
+    ros::NodeHandle privateNh("~");
+
+    double probHit, probMiss, thresMin, thresMax;
+    privateNh.param("frame_id", mWorldFrameId, mWorldFrameId);
+    privateNh.param("base_frame_id", mBaseFrameId, mBaseFrameId);
+    privateNh.param("height_map", mUseHeightMap, mUseHeightMap);
+    privateNh.param("colored_map", mUseColoredMap, mUseColoredMap);
+    privateNh.param("color_factor", mColorFactor, mColorFactor);
+    privateNh.param("pointcloud_min_x", mPointcloudMinX, mPointcloudMinX);
+    privateNh.param("pointcloud_max_x", mPointcloudMaxX, mPointcloudMaxX);
+    privateNh.param("pointcloud_min_y", mPointcloudMinY, mPointcloudMinY);
+    privateNh.param("pointcloud_max_y", mPointcloudMaxY, mPointcloudMaxY);
+    privateNh.param("pointcloud_min_z", mPointcloudMinZ, mPointcloudMinZ);
+    privateNh.param("pointcloud_max_z", mPointcloudMaxZ, mPointcloudMaxZ);
+    privateNh.param("occupancy_min_z", mOccupancyMinZ, mOccupancyMinZ);
+    privateNh.param("occupancy_max_z", mOccupancyMaxZ, mOccupancyMaxZ);
+    privateNh.param("min_x_size", mMinSizeX,mMinSizeX);
+    privateNh.param("min_y_size", mMinSizeY,mMinSizeY);
+    privateNh.param("filter_speckles", mFilterSpeckles, mFilterSpeckles);
+    privateNh.param("filter_ground", mFilterGroundPlane, mFilterGroundPlane);
+    privateNh.param("ground_filter/distance", mGroundFilterDistance,
+                                                         mGroundFilterDistance);
+    privateNh.param("ground_filter/angle", mGroundFilterAngle,
+                                                            mGroundFilterAngle);
+    privateNh.param("ground_filter/plane_distance", mGroundFilterPlaneDistance,
+                                                   mGroundFilterPlaneDistance);
+    privateNh.param("sensor_model/max_range", mMaxRange, mMaxRange);
+    privateNh.param("resolution", mRes, mRes);
+    privateNh.param("sensor_model/hit", probHit, 0.7);
+    privateNh.param("sensor_model/miss", probMiss, 0.4);
+    privateNh.param("sensor_model/min", thresMin, 0.12);
+    privateNh.param("sensor_model/max", thresMax, 0.97);
+    privateNh.param("compress_map", mCompressMap, mCompressMap);
+    privateNh.param("incremental_2D_projection", mIncrementalUpdate,
+                                                            mIncrementalUpdate);    
+
+    mOcTree = new ColorOcTree(mRes);
+    mOcTree.setProbHit(probHit);
+    mOcTree.setprobMiss(probMiss);
+    mOcTree.setClampingThresMin(thresMin);
+    mOcTree.setClampingThresMax(thresMax);
+    mTreeDepth = mOcTree.getTreeDepth();
+    mMaxTreeDepth = mTreeDepth;
+    mGridMap.info.resolution = mRes;
+
+    double r, g, b, a;
+    privateNh.param("color/r", r, 0.0);
+    privateNh.param("color/g", g, 0.0);
+    privateNh.param("color/b", b, 1.0);
+    privateNh.param("color/a", a, 1.0);
+    mColor.r = r;
+    mColor.g = g;
+    mColor.b = b;
+    mColor.a = a;
+
+    privateNh.param("color_free/r", r, 0.0);
+    privateNh.param("color_free/g", g, 1.0);
+    privateNh.param("color_free/b", b, 0.0);
+    privateNh.param("color_free/a", a, 1.0);
+    mColorFree.r = r;
+    mColorFree.g = g;
+    mColorFree.b = b;
+    mColorFree.a = a;
+
+    privateNh.param("publish_free_space", mPublishFreeSpace, mPublishFreeSpace);
+    privateNh.param("latch", mLatchedTopics, mLatchedTopics);
+
+    mMarkerPub = mNh.advertise<visualization_msgs::MarkerArray>
+        ("occupied_cells_vis_array", 1, mLatchedTopics);
+    mBinaryMapPub = mNh.advertise<Octomap>("octomap_binary", 1, mLatchedTopics);
+    mFullMapPub = mNh.advertise<Octomap>("octomap_full", 1, mLatchedTopics);
+    mPointCloudPub = mNh.advertise<PCLPointCloud>("octomap_point_cloud_centers",
+                                                            1, m_latchedTopics);
+    mMapPub = mNh.advertise<nav_msgs::OccupancyGrid>("projected_map", 5,
+                                                                mLatchedTopics);
+    mFmarkerPub = mNh.advertise<visualization_msgs::MarkerArray
+                                     ("free_cells_vis_array",1, mLatchedTopics);
 };
 
 void
@@ -184,6 +278,7 @@ PCLServer::SetOcTree(PCLPointCloud::Ptr aCloud)
     for (auto &it : aCloud->points)
         mOcTree.integrateNodeColor(it.x, it.y, it.z, it.r, it.g, it.b);
     mOcTree.updateInnerOccupancy();
+    mTreeDepth = mOcTree.getTreeDepth();
     double minX, minY, minZ;
     double maxX, maxY, maxZ;
     mOcTree.getMetricMin(minX, minY, minZ);
@@ -360,7 +455,7 @@ PCLServer::InsertScan(const tf::Point& aSensorOriginTf,
         if (mOcTree.coordToKeyCheked(point, endKey)) {
             updateMinKey(endKey, mUpdateBBXMin);
             updateMaxKey(endKey, mUpdateBBXMax);
-        } else {
+        } else
             cerr << "Could not generate Key for endpoint";
     }
     for (auto &it : aNonGround->points) {
@@ -418,10 +513,51 @@ PCLServer::PublishAll() {
         cerr << "Nothing to publish, octree is empty";
         return;
     }
-    bool publishFreeMarkerArray = m_publishFreeSpace && (m_latchedTopics || m_fmarkerPub.getNumSubscribers() > 0);
-  bool publishMarkerArray = (m_latchedTopics || m_markerPub.getNumSubscribers() > 0);
-  bool publishPointCloud = (m_latchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
-  bool publishBinaryMap = (m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
-  bool publishFullMap = (m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
-  m_publish2DMap = (m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
+    bool publishFreeMarkerArray = mPublishFreeSpace && (mLatchedTopics || mFmarkerPub.getNumSubscribers() > 0);
+    bool publishMarkerArray = (mLatchedTopics || mMarkerPub.getNumSubscribers() > 0);
+    bool publishPointCloud = (mLatchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
+    bool publishBinaryMap = (m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
+    bool publishFullMap = (m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
+    m_publish2DMap = (m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
+    ???????????????????????????????????????????????????????????????????????????????????????????????????????????
+
+    visualization_msgs::MarkerArray freeNodesVis;
+    freeNodesVis.markers.resize(mTreeDepth + 1);
+
+    geometry_msgs::Pose pose;
+    pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
+
+    visualization_msgs::MarkerArray occupiedNodesVis;
+    occupiedNodesVis.markers.resize(mTreeDeapth + 1);
+
+    PCLPointCloud Cloud;
+    
+    ?????
+}
+
+void
+PCLServer::HandlePreNodeTraversal()
+{
+    if (???) {
+        mGridMap.header.frame_id = nWorldFrameId;
+        nav_msgs::MapMetaData oldMapInfo = mGridMap.info;
+
+        double minX, minY, minZ, maxX, maxY, maxZ;
+        mOcTree.getMetricMin(minX, minY, minZ);
+        mOcTree.getMetricMax(maxX, maxY, maxZ);
+
+        point3d minPt(minX, minY, minZ);
+        point3d maxPt(maxX, maxY, maxZ);
+        OcTreeKey minKey = mOcTree.coordToKey(minPt, mMaxTreeDepth);
+        OcTreeKey maxKey = mOcTree.coordToKey(maxPt, mMaxTreeDepth);
+
+        double halfPaddedX = 0.5 * mMinSizeX;
+        double halfPaddedY = 0.5 * mMinSizeY;
+        minX = min(minX, -halfPaddedX);
+        maxX = max(maxX, halfPaddedX);
+        minX = min(minX, -halfPaddedX);
+        maxX = max(maxX, halfPaddedX);
+    }
+}
+    
 }

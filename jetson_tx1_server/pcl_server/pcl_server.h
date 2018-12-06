@@ -59,24 +59,44 @@ private:
 
     bool mCompressMap;
     bool mFilterGroundPlane;
+    bool mFilterSpeckles;
     bool mHasData;
+    bool mIncrementalUpdate;
+    bool mLatchedTopics;
+    bool mPublishFreeSpace;
     bool mStopSignal;
+    bool mUseColoredMap;
+    bool mUseHeightMap;
+    double mColorFactor;
     double mGroundFilterAngle;
     double mGroundFilterDistance;
     double mGroundFilterPlaneDistance;
     double mMaxRange;
+    double mMinSizeX;
+    double mMinSizeY;
+    double mOccupancyMaxZ;
+    double mOccupancyMinZ;
     double mPointCloudMaxX;
     double mPointCloudMaxY;
     double mPointCloudMaxZ;
     double mPointCloudMinX;
     double mPointCloudMinY;
     double mPointCloudMinZ;
+    double mRes;
     int mPort;
+    nav_msgs::OccupancyGrid mGridMap;
     octomap::ColorOcTree mOcTree;
     octomap::KeyRay mKeyRay;
     octomap::OcTreeKey mUpdateBBXMin;
     octomap::OcTreeKey mUpdateBBXMax;
     pcl::VoxelGrid<PCLPoint> mVoxelGridFilter;
+    ros::NodeHandle mNh;
+    ros::Publisher mBinaryMapPub;
+    ros::Publisher mFmarkerPub;
+    ros::Publisher mFullMapPub;
+    ros::Publisher mMapPub;
+    ros::Publisher mMarkerPub;
+    ros::Publisher mPointCloudPub;
     sl::Camera mZed;
     sl::Mat mDataCloud;
     std::mutex mMutexInput;
@@ -84,7 +104,11 @@ private:
     std::string mWorldFrameId;
     std::string mBaseFrameId;
     std::thread mZedCallback;
+    std_msgs::ColorRGBA mColor;
+    std_msgs::ColorRGBA mColorFree;
     tf::TransformListener mTfListener;
+    unsigned mTreeDepth;
+    unsigned mMaxTreeDepth;
 };
 
 }
