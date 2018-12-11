@@ -12,7 +12,7 @@ PCLServer::PCLServer(const int aPort,
                      const float aLeafSizeY,
                      const float aLeafSizeZ)
     : mPort(aPort)
-    , mOcTree(0.5)
+    , mOcTree(0.1)
     , mMaxRange(-1.0)
 {
     InitParameters initParams;
@@ -76,8 +76,6 @@ PCLServer::Run()
                 }
                 index += 4;
             }
-            p_pcl_point_cloud->width = mDataCloud.getWidth();
-            p_pcl_point_cloud->height = mDataCloud.getHeight();
             mVoxelGridFilter.setInputCloud(p_pcl_point_cloud);
             mVoxelGridFilter.filter(*point_cloud_buff);
             //point_cloud_buff = p_pcl_point_cloud;
@@ -151,7 +149,6 @@ PCLServer::CreateRGBVisualizer(PCLPointCloud::ConstPtr aCloud)
     pcl::visualization::PointCloudColorHandlerRGBField<PCLPoint> rgb(aCloud);
     viewer->addPointCloud<PCLPoint>(aCloud, rgb);
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1.5);
-    //viewer->addCoordinateSystem(1.0);
     viewer->initCameraParameters();
     return (viewer);
 }
@@ -211,7 +208,6 @@ PCLServer::InsertCloud(const PCLPointCloud::Ptr aCloud)
     pclNonGround.header = Cloud.header;
 
     InsertScan(GetOriginVector(cameraPose.pose_data), pclGround, pclNonGround);
-    //PublishAll(Cloud.header.stamp);
 }
 
 void
@@ -298,34 +294,4 @@ PCLServer::sUpdateKey(const OcTreeKey& aIn, OcTreeKey& aMin, OcTreeKey& aMax)
     }
 }
 
-/*
-void
-PCLServer::PublishAll() {
-    size_t octomapSize = mOcTree->size();
-    if (octomapSize <= 1) {
-        cerr << "Nothing to publish, octree is empty";
-        return;
-    }
-    bool publishFreeMarkerArray = mPublishFreeSpace && (mLatchedTopics || mFmarkerPub.getNumSubscribers() > 0);
-    bool publishMarkerArray = (mLatchedTopics || mMarkerPub.getNumSubscribers() > 0);
-    bool publishPointCloud = (mLatchedTopics || m_pointCloudPub.getNumSubscribers() > 0);
-    bool publishBinaryMap = (m_latchedTopics || m_binaryMapPub.getNumSubscribers() > 0);
-    bool publishFullMap = (m_latchedTopics || m_fullMapPub.getNumSubscribers() > 0);
-    m_publish2DMap = (m_latchedTopics || m_mapPub.getNumSubscribers() > 0);
-    ???????????????????????????????????????????????????????????????????????????????????????????????????????????
-
-    visualization_msgs::MarkerArray freeNodesVis;
-    freeNodesVis.markers.resize(mTreeDepth + 1);
-
-    geometry_msgs::Pose pose;
-    pose.orientation = tf::createQuaternionMsgFromYaw(0.0);
-
-    visualization_msgs::MarkerArray occupiedNodesVis;
-    occupiedNodesVis.markers.resize(mTreeDeapth + 1);
-
-    PCLPointCloud Cloud;
-    
-    ?????
-}
-*/
 }
