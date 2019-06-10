@@ -23,6 +23,8 @@
 #include <octomap/OcTreeKey.h>
 #include <sl_zed/Camera.hpp>
 
+#include "planner.h"
+
 namespace server {
 
 class PCLServer
@@ -51,12 +53,10 @@ private:
     void FilterGroundPlane(const PCLPointCloud& aCloud,
                            PCLPointCloud& aGround,
                            PCLPointCloud& aNonGround);
-    void InsertCloud(const PCLPointCloud::Ptr aCloud);
+    void InsertCloud(const PCLPointCloud::Ptr aCloud, sl::Pose& aCameraPose);
     void InsertScan(const octomap::point3d aOriginVector,
-                    const PCLPointCloud& aGround,
-                    const PCLPointCloud& aNonGround);
+                    const PCLPointCloud& aCloud);
     void TransformAsMatrix(sl::Transform& aPoseData, Eigen::Matrix4f& aMPose);
-    void SetOcTree(PCLPointCloud::Ptr aCloud);
     void Start();
     void StartZED();
     void UpdateBBX();
@@ -68,15 +68,17 @@ private:
     bool mStopSignal;
     double mMaxRange;
     int mPort;
-    octomap::ColorOcTree mOcTree;
+    octomap::OcTree mOcTree;
     octomap::KeyRay mKeyRay;
     octomap::OcTreeKey mBBXMin;
     octomap::OcTreeKey mBBXMax;
     pcl::VoxelGrid<PCLPoint> mVoxelGridFilter;
     sl::Camera mZed;
     sl::Mat mDataCloud;
+    sl::Pose mCameraPose;
     std::mutex mMutexInput;
     std::shared_ptr<pcl::visualization::PCLVisualizer> mViewer;
+    std::shared_ptr<Planner> mOPlanner;
     std::thread mZedCallback;
 };
 

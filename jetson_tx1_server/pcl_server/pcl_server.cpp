@@ -15,12 +15,13 @@ PCLServer::PCLServer(const int aPort,
     , mOcTree(0.1)
     , mMaxRange(-1.0)
 {
+    //parameters zed cam
     InitParameters initParams;
     initParams.camera_resolution = RESOLUTION_VGA;
     initParams.camera_fps = 30;
     initParams.coordinate_units = UNIT_METER;
     initParams.coordinate_system = COORDINATE_SYSTEM_RIGHT_HANDED_Y_UP;
-    initParams.depth_mode = DEPTH_MODE_QUALITY;
+    initParams.depth_mode = DEPTH_MODE_MEDIUM;
     ERROR_CODE err = mZed.open(initParams);
     if (err != SUCCESS) {
         cout << toString(err) << "\n";
@@ -32,13 +33,15 @@ PCLServer::PCLServer(const int aPort,
     trackingParameters.enable_spatial_memory = true;
     mZed.enableTracking(trackingParameters);
 
-    mOcTree.setProbHit(0.7);
+    //ocTree
+    mOcTree.setProbHit(0.55);
     mOcTree.setProbMiss(0.4);
     mOcTree.setClampingThresMin(0.12);
     mOcTree.setClampingThresMax(0.97);
 
+    mOPlanner = std::make_shared<Planner>();
+
     mVoxelGridFilter.setLeafSize(aLeafSizeX, aLeafSizeY, aLeafSizeZ);
-    
 };
 
 void
@@ -64,6 +67,7 @@ PCLServer::Run()
     while (!mViewer->wasStopped()) {
         if (mMutexInput.try_lock()) {
             float *p_data_cloud = mDataCloud.getPtr<float>();
+            Pose cameraPose = mCameraPose;
             int index = 0;
             for (auto &it : p_pcl_point_cloud->points) {
                 if (!isValidMeasure(p_data_cloud[index]))
@@ -88,11 +92,24 @@ PCLServer::Run()
                     nrPoints * 8 * sizeof(float)));*/
             mMutexInput.unlock();
             mViewer->updatePointCloud(point_cloud_buff);
-            InsertCloud(point_cloud_buff);
-            //SetOcTree(point_cloud_buff);
+            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+            for (int i = 0; i <= 3; i++) {
+                std::cout << cameraPose.pose_data(i, 0) << " " << cameraPose.pose_data(i, 1) << " " << cameraPose.pose_data(i, 2) << " " << cameraPose.pose_data(i, 3) << "\n";
+            }
+            std::cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+            InsertCloud(point_cloud_buff, cameraPose);
+            mOPlanner->UpdateMap(mOcTree);
+            //mOPlanner->Replan();
             mViewer->spinOnce(10);
         } else
             sleep_ms(1);
+    }
+    mOPlanner->SetStart(mCameraPose.pose_data(0, 3), mCameraPose.pose_data(1, 3), mCameraPose.pose_data(2, 3));
+    mOPlanner->SetGoal(mCameraPose.pose_data(0, 3), mCameraPose.pose_data(1, 3), mCameraPose.pose_data(2, 3) - 0.5);
+    mOPlanner->Replan();
+    auto path = mOPlanner->GetSmoothPath();
+    for (int i = 0; i < path.size(); i++) {
+        std::cout << std::get<0>(path[i]) << " " << std::get<1>(path[i]) << " " << std::get<2>(path[i]) << "\n";
     }
     mOcTree.write("test.ot");
     CloseZED();
@@ -115,6 +132,7 @@ PCLServer::Start()
         if (mZed.grab(SENSING_MODE_STANDARD) == SUCCESS) {
             mMutexInput.lock();
             mZed.retrieveMeasure(mDataCloud, MEASURE_XYZRGBA);
+            mZed.getPosition(mCameraPose, REFERENCE_FRAME_WORLD);
             mMutexInput.unlock();
             mHasData = true;
         } else
@@ -154,20 +172,6 @@ PCLServer::CreateRGBVisualizer(PCLPointCloud::ConstPtr aCloud)
 }
 
 void
-PCLServer::SetOcTree(PCLPointCloud::Ptr aCloud)
-{
-    Pointcloud octoCloud;
-    for (auto &it : aCloud->points)
-        octoCloud.push_back(it.x, it.y, it.z);
-    point3d OriginVector(0,0,0);
-    mOcTree.insertPointCloud(octoCloud, OriginVector);
-    for (auto &it : aCloud->points)
-        mOcTree.integrateNodeColor(it.x, it.y, it.z, it.r, it.g, it.b);
-    mOcTree.updateInnerOccupancy();
-    UpdateBBX();
-}
-
-void
 PCLServer::UpdateBBX()
 {
     double minX, minY, minZ, maxX, maxY, maxZ;
@@ -182,40 +186,25 @@ PCLServer::UpdateBBX()
 }
 
 void
-PCLServer::InsertCloud(const PCLPointCloud::Ptr aCloud)
+PCLServer::InsertCloud(const PCLPointCloud::Ptr aCloud, Pose& aCameraPose)
 {
-    PCLPointCloud Cloud = *aCloud;
-    Pose cameraPose;
-    mZed.getPosition(cameraPose, REFERENCE_FRAME_WORLD);
+    PCLPointCloud Cloud;
     Eigen::Matrix4f worldPose;
-    TransformAsMatrix(cameraPose.pose_data, worldPose);
-    /*
-    pcl::PassThrough<PCLPoint> passX;
-    passX.setFilterFieldName("x");
-    passX.setFilterLimits(mPointCloudMinX, mPointCloudMaxX);
-    pcl::PassThrough<PCLPoint> passY;
-    passY.setFilterFieldName("y");
-    passY.setFilterLimits(mPointCloudMinY, mPointCloudMaxY);
-    pcl::PassThrough<PCLPoint> passZ;
-    passZ.setFilterFieldName("z");
-    passZ.setFilterLimits(mPointCloudMinZ, mPointCloudMaxZ);
-    */
-    PCLPointCloud pclGround;
-    PCLPointCloud pclNonGround;
-    pcl::transformPointCloud(Cloud, Cloud, worldPose);
-    pclNonGround = Cloud;
-    pclGround.header = Cloud.header;
-    pclNonGround.header = Cloud.header;
-
-    InsertScan(GetOriginVector(cameraPose.pose_data), pclGround, pclNonGround);
+    TransformAsMatrix(aCameraPose.pose_data, worldPose);
+    pcl::transformPointCloud(*aCloud, *aCloud, worldPose);
+    Cloud = *aCloud;
+    Cloud.header = aCloud->header;    
+    InsertScan(GetOriginVector(aCameraPose.pose_data), Cloud);
 }
 
 void
 PCLServer::TransformAsMatrix(sl::Transform& aPoseData, Eigen::Matrix4f& aMPose)
 {
-    for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
+    for (int i = 0; i <= 3; i++) {
+        for (int j = 0; j <= 3; j++) {
             aMPose(i, j) = aPoseData(i, j);
+        }
+    }
 }
 
 point3d
@@ -226,62 +215,45 @@ PCLServer::GetOriginVector(Transform& aPoseData)
 
 void
 PCLServer::InsertScan(const point3d aOriginVector,
-                      const PCLPointCloud& aGround,
-                      const PCLPointCloud& aNonGround)
+                      const PCLPointCloud& aCloud)
 {
-    mOcTree.coordToKeyChecked(aOriginVector, mBBXMin);
-    mOcTree.coordToKeyChecked(aOriginVector, mBBXMax);
+    if (!mOcTree.coordToKeyChecked(aOriginVector, mBBXMin) ||
+        !mOcTree.coordToKeyChecked(aOriginVector, mBBXMax)) {
+        cerr << "Could not generate Key for origin\n";
+    }
     unsigned char* colors = new unsigned char[3];
     KeySet freeCells, occupiedCells;
-    for (auto &it : aGround.points) {
+    for (auto &it : aCloud.points) {
         point3d point(it.x, it.y, it.z);
-        if ((mMaxRange > 0.0) && ((point - aOriginVector).norm() > mMaxRange))
-            point = aOriginVector + (point - aOriginVector).normalized() *
-                    mMaxRange;
-        if (mOcTree.computeRayKeys(aOriginVector, point, mKeyRay))
-            freeCells.insert(mKeyRay.begin(), mKeyRay.end());
-        OcTreeKey endKey;
-        if (mOcTree.coordToKeyChecked(point, endKey))
-            sUpdateKey(endKey, mBBXMin, mBBXMax);
-        else
-            cerr << "Could not generate Key for endpoint";
-    }
-    for (auto &it : aNonGround.points) {
-        point3d point(it.x, it.y, it.z);
-        if((mMaxRange < 0.0) || ((point - aOriginVector).norm() <= mMaxRange)) {
-            if (mOcTree.computeRayKeys(aOriginVector, point, mKeyRay))
+        if ((mMaxRange < 0.0) || ((point - aOriginVector).norm() <= mMaxRange)) {
+            if (mOcTree.computeRayKeys(aOriginVector, point, mKeyRay)) {
                 freeCells.insert(mKeyRay.begin(), mKeyRay.end());
-            OcTreeKey key;
-            if (mOcTree.coordToKeyChecked(point, key)) {
-                occupiedCells.insert(key);
-                sUpdateKey(key, mBBXMin, mBBXMax);
-
-                const int rgb = *reinterpret_cast<const int*>(&(it.rgb));
-                colors[0] = ((rgb >> 16) & 0xff);
-                colors[1] = ((rgb >> 8) & 0xff);
-                colors[2] = (rgb & 0xff);
-                mOcTree.averageNodeColor(it.x, it.y, it.z,
-                                         colors[0], colors[1], colors[2]);
             }
+            OcTreeKey key;
+            if (mOcTree.coordToKeyChecked(point, key))
+                occupiedCells.insert(key);
         } else {
             point3d newEnd = aOriginVector + (point - aOriginVector).normalized() * mMaxRange;
             if (mOcTree.computeRayKeys(aOriginVector, newEnd, mKeyRay)) {
                 freeCells.insert(mKeyRay.begin(), mKeyRay.end());
                 OcTreeKey endKey;
-                if (mOcTree.coordToKeyChecked(newEnd, endKey)){
+                if (mOcTree.coordToKeyChecked(newEnd, endKey)) {
                     freeCells.insert(endKey);
                     sUpdateKey(endKey, mBBXMin, mBBXMax);
-                } else
-                    cerr << "Could not generate Key for endpoint ";
+                } else {
+                    cerr << "Could not generate Key for endpoint\n";
+                }
             }
-        } 
+        }
     }
-    for(KeySet::iterator it = freeCells.begin(), end=freeCells.end(); it != end; it++)
-        if (occupiedCells.find(*it) == occupiedCells.end())
-            mOcTree.updateNode(*it, false);
-    for (KeySet::iterator it = occupiedCells.begin(), end=occupiedCells.end(); it!= end; it++)
-        mOcTree.updateNode(*it, true);
-    point3d minPt, maxPt;
+    for (auto &it : freeCells) {
+        if (occupiedCells.find(it) == occupiedCells.end()) {
+            mOcTree.updateNode(it, false);
+        }
+    }
+    for (auto &it : occupiedCells) {
+        mOcTree.updateNode(it, true);
+    }
     mOcTree.prune();
 }
 

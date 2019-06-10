@@ -19,6 +19,9 @@ find_package(OpenCV REQUIRED)
 find_package(CUDA ${ZED_CUDA_VERSION} EXACT REQUIRED)
 find_package(PCL CONFIG REQUIRED COMPONENTS)
 find_package(OCTOMAP REQUIRED)
+find_package(ompl REQUIRED)
+find_package(fcl REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 include_directories(${ZED_INCLUDE_DIRS})
 include_directories(${OPENCV_INCLUDE_DIRS})
@@ -26,6 +29,9 @@ include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${PCL_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${OCTOMAP_INCLUDE_DIRS})
+include_directories(${OMPL_INCLUDE_DIRS})
+include_directories(${fcl_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
 
 link_directories(${CUDA_LIBRARY_DIRS})
 link_directories(${ZED_INCLUDE_DIRS})
@@ -37,6 +43,8 @@ add_definitions(${PCL_DEFENITIONS})
 
 set(SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/pcl_server/pcl_server.h"
 	"${CMAKE_CURRENT_SOURCE_DIR}/pcl_server/pcl_server.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/pcl_server/planner.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/pcl_server/planner.cpp"
 	"main.cpp" 	
 )
 
@@ -49,4 +57,4 @@ else()
     SET(ZED_LIBS ${ZED_STATIC_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_LIBRARY})
 endif()
 
-target_link_libraries(main PUBLIC ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} ${ZED_LIBS} ${OpenCV_LIBRARIES} ${PCL_VISUALIZATION_LIBRARIES} ${PCL_LIBRARIES} ${OCTOMAP_LIBRARIES})
+target_link_libraries(main PUBLIC ${PCL_COMMON_LIBRARIES} ${PCL_IO_LIBRARIES} ${ZED_LIBS} ${OpenCV_LIBRARIES} ${PCL_VISUALIZATION_LIBRARIES} ${PCL_LIBRARIES} ${OCTOMAP_LIBRARIES} fcl ${OMPL_LIBRARIES})
